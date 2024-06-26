@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Geologica:wght@100..900&display=swap');
+            * {
+                border: 0;
+                padding: 0;
+                margin: 0;
+                outline: none;
+                user-select: none;
+                font-family: "Geologica", sans-serif;
+                font-optical-sizing: auto;
+                font-weight: 300;
+            }
+            .screen {
+                list-style-type: none;
+                padding: 10px;
+            }
+            .screen .section {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                width: calc(100% - (5px * 2));
+                padding: 5px;
+            }
+            .screen .section #query {
+                width: calc(100% - (12.5px * 2));
+                padding: 10px 12.5px;
+                border: 1px solid #222222;
+                font-size: 15px;
+                text-align: center;
+            }
+            .screen .section .container {
+                color: #EEEEEE;
+                background-color: #222222;
+                border-radius: 5px;
+                overflow: hidden;
+                width: 100%;
+            }
+            .screen .section .overlay {
+                display: flex;
+                align-items: center;
+                padding: 5px;
+            }
+            .screen .section .overlay .info {
+                width: calc(100% - 55px - (5px * 3));
+                font-size: 13px;
+                padding: 0px calc(5px * 2);
+                padding-right: 0px;
+                color: rgba(255, 255, 255, 0.75);
+            }
+            .screen .section .overlay .info #player-title {
+                font-weight: 600;
+                color: rgba(255, 255, 255, 1);
+                margin-right: 5px;
+            }
+            .screen .section .overlay #player-cover {
+                border-radius: 5px;
+            }
+            .screen .section .overlay .progress {
+                height: calc(6px - (1px * 2));
+                margin-top: calc(5px * 1.25);
+                background-color: rgba(0, 0, 0, 0.5);
+                border: 1px solid rgba(255, 255, 255, 0.25);
+                border-radius: 5px;
+                overflow: hidden;
+            }
+            .screen .section .overlay .progress #player-progress {
+                height: 100%;
+                background-color: rgba(255, 255, 255, 0.75)
+            }
+        </style>
+    </head>
+    <body>
+        <ul class="screen">
+            <li class="section">
+                <input type="text" id="query">
+            </li>
+            <li class="section">
+                <div class="container">
+                    <div class="overlay">
+                        <img id="player-cover">
+                        <div class="info">
+                            <div style="max-width: calc(100% - 5px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                <span id="player-title"></span>
+                                <span id="player-artists"></span>
+                            </div>
+                            <div class="progress">
+                                <div id="player-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <audio id="player" style="display: none"></audio>
+                </div>
+            </li>
+        </ul>
+    </body>
+    <script>
+        timer = null
+        query = document.getElementById("query")
+        player = [{
+            container: document.getElementsByClassName("container")[0],
+            title: document.getElementById("player-title"),
+            progress: document.getElementById("player-progress"),
+            artists: document.getElementById("player-artists"),
+            cover: document.getElementById("player-cover")
+        }, document.getElementById("player")]
+        query.addEventListener("input", () => {
+            if (timer) clearTimeout(timer)
+            timer = setTimeout(async function(){
+                if (query.value.length > 0) {
+                    request = await (await fetch("/search", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            query: query.value.split(" ").join("+")
+                        })
+                    })).json()
+                    selected = request[0]
+                    player[1].src = "/media/" + selected.id[0]
+                    player[0].title.textContent = selected.title
+                    player[0].artists.textContent = selected.artists.join(", ")
+                    player[0].cover.src = "/media/" + selected.id[1] + "?size=55x55"
+                    player[0].container.style.backgroundImage = `src("/media/${selected.id[1]}?size=10x10")`
+                    player[0].progress.style.width = "100%"
+                    player[0].progress.max = selected.duration[1]
+                    player[1].onloadeddata = function() {
+                        player[1].ontimeupdate = function() {
+                            player[0].progress.style.width = (player[1].currentTime/player[0].progress.max)*100 + "%"
+                        }
+                        player[1].play()
+                    }
+                }
+            }, 1000)
+        })
+        function play(id) {
+            document.getElementById("player").src = "/media/" + id
+        }
+    </script>
+</html>
