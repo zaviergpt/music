@@ -18,7 +18,7 @@ class Audio:
 
     def signature(self, length=2**3):
         data = self.data.copy()
-        characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+        characters = "abcdefghijklmnopqrstuvwxyz0123456789"
         if data.ndim == 1:
             data = np.column_stack((data, data))
         data = np.abs(data.astype(np.float32)) / np.iinfo(np.int16).max
@@ -55,6 +55,8 @@ class Audio:
         bass_energy = np.sum(energy[bass_idx])
         crisp_energy = np.sum(energy[crisp_idx])
         total_energy = np.sum(energy[full_idx])
+        rms = np.sqrt(np.mean(data**2))
+        db = 20 * np.log10(rms) if rms > 0 else -np.inf
         return {
             "bass": float(bass_energy/total_energy),
             "treble": float(crisp_energy/total_energy),
@@ -63,15 +65,18 @@ class Audio:
                 "score": float((highest_freq - lowest_freq)/15960),
                 "max": float(highest_freq),
                 "min": float(lowest_freq)
-            }
+            },
+            "decibels": db
         }
     
 def log(text):
     sys.stdout.write("\0337")
     sys.stdout.write(f"\033[{size.lines};{1}H")
-    sys.stdout.write(u"\u001b[2K\u001b[0m\u001b[1000D\u001b[1m\u001b[31;1m")
+    sys.stdout.write(u"\u001b[2K\u001b[0m\u001b[1000D\u001b[1m\u001b[35;1m")
     sys.stdout.write("{}".format(str(datetime.timedelta(seconds=round(((time.time() - start)/(index+1)) * (len(audiofiles) - (index+1)))))))
-    sys.stdout.write(u"\u001b[37;1m ")
+    sys.stdout.write(u" \u001b[36;1m")
+    sys.stdout.write("{}".format(len(ids)))
+    sys.stdout.write(u" \u001b[37;1m")
     sys.stdout.write("{}".format(file.split("\\")[-1]))
     sys.stdout.write(u"\u001b[0m ")
     sys.stdout.write("\0338")
@@ -81,13 +86,14 @@ def log(text):
 if __name__ in "__main__":
     audiofiles = []
     ids = []
+    extra = {}
     for root, dirs, files in os.walk(os.getcwd()):
         for file in files:
-            if file.endswith(".flac"):
+            if file.endswith(".flac") and "$" not in root:
                 audiofiles.append(os.path.join(root, file))
     start = time.time()
     size = os.get_terminal_size()
-    writer = csv.writer(open("tracks.csv", "w", newline=""))
+    writer = csv.writer(open("tracks.csv", "w", newline="", encoding='utf-8'))
     sys.stdout.write(f"\033[{1};{size.lines-1}r")
     sys.stdout.write(f"\033[{1};{1}H")
     sys.stdout.flush()
@@ -95,11 +101,12 @@ if __name__ in "__main__":
         audio = Audio(file)
         signature = audio.signature()
         metadata = {
+            "id": signature,
             "title": audio.metadata["title"][0],
             "album": audio.metadata["album"][0],
-            # "artists": audio.metadata["artist"],
-            # "albumartist": audio.metadata["albumartist"] if audio.metadata["albumartist"][0] in audio.metadata["artist"] else "Various Artists",
-            "mainartist": [artist for artist in audio.metadata["albumartist"] if artist in audio.metadata["artist"]][0] if len([artist for artist in audio.metadata["albumartist"] if artist in audio.metadata["artist"]]) > 0 else audio.metadata["artist"][0]
+            "albumartist": (audio.metadata["albumartist"][0] if audio.metadata["albumartist"][0] in audio.metadata["artist"] else "") if "albumartist" in audio.metadata.keys() else "",
+            "mainartist": ([artist for artist in audio.metadata["albumartist"] if artist in audio.metadata["artist"]][0] if len([artist for artist in audio.metadata["albumartist"] if artist in audio.metadata["artist"]]) > 0 else audio.metadata["artist"][0]) if "albumartist" in audio.metadata.keys() else audio.metadata["artist"][0],
+            "artists": ",".join(["'{}'".format(artist) for artist in audio.metadata["artist"]]) if len(audio.metadata["artist"]) > 1 else audio.metadata["artist"][0]
         }
         if index < 1:
             writer.writerow([item[0] for item in metadata.items()])
@@ -109,7 +116,7 @@ if __name__ in "__main__":
             ids.append(signature)
         else:
             log(u"\u001b[31;1m{}".format(signature))
-        log(" {}".format(file.split("\\")[-1]))
+        log("\u001b[0m {}".format(file.split("\\")[-1]))
         log("\u001b[37;1m {} - {}".format(metadata["title"], metadata["mainartist"]))
         log("\n")
 
@@ -119,5 +126,6 @@ sys.stdout.write(f"\033[{size.lines};{1}H")
 sys.stdout.write(u"\u001b[2K\u001b[0m\u001b[1000D\u001b[1m\u001b[37;1m")
 sys.stdout.write(u"\u001b[0m ")
 sys.stdout.write("\0338")
-sys.stdout.write("\nFinished Successfully.\n\n")
+sys.stdout.write(u"\u001b[0m ")
+sys.stdout.write("\nFinished Successfully.\nIndexed a total of {} unique tracks.\n\n".format(len(ids)))
 sys.stdout.flush()
